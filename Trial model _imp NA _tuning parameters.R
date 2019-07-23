@@ -1,41 +1,41 @@
 ## Using Random Foresting 
 setwd("F:/Data Science Course Data/Defour Project")
 sales_df <- read.csv("Train_Sales.csv")
-
-
-##Treating NAs
-names(sales_df)
-library(mice)
-
-#Loading the following package for looking at the missing values
-install.packages("VIM")
-library(VIM)
-library(lattice)
-
 str(sales_df)
+set.seed(500)
 
-set.seed(12345)
-sales_df[sales_df == 0] <- NA ## replacing 0 values to NA's
-sales_df <- sales_df
-tempData <- mice(sales_df,m=3, maxit = 2 ,seed=500, where = is.na(sales_df))
+new_data <- data.frame(cbind(Outlet_Type=c(sales_df$Outlet_Type), 
+                             Item_Type = c(sales_df$Item_Type) , 
+                             Outlet_Location_Type = c(sales_df$Outlet_Location_Type),
+                             Item_Weight = c(sales_df$Item_Weight),
+                             Item_Visibility = c(sales_df$Item_Visibility) , 
+                             Item_MRP = c(sales_df$Item_MRP) , 
+                             Outlet_Establishment_Year = c(sales_df$Outlet_Establishment_Year),
+                             Item_Outlet_Sales = c(sales_df$Item_Outlet_Sales)))
+
+summary(new_data)
+names(new_data)
+
+library(mice)
+new_data[new_data == 0] <- NA ## replacing 0 values to NA's
+tempData <- mice(new_data,m=5, maxit = 5 ,seed=500, where = is.na(new_data))
 summary(tempData)
-
-## Imputed dataset
-imputed_data <- complete(tempData,1)
 densityplot(tempData)
+tempData$imp$sales_df.Item_Weight
+tempData$imp$sales_df.Item_Visibility
+imputed_data <- complete(tempData,3)
+new_data <- imputed_data
 
-
-sales_df <- imputed_data
 ##Spliting dataset into test & train
+set.seed(500)
 library(caTools)
-split_sales_df <- sample.split(sales_df,SplitRatio = 0.8)
-train_split <- subset(sales_df,split_sales_df == TRUE)
-test_split <- subset(sales_df,split_sales_df == FALSE)
+split_sales_df <- sample.split(new_data,SplitRatio = 0.8)
+train_split <- subset(new_data,split_sales_df == TRUE)
+test_split <- subset(new_data,split_sales_df == FALSE)
 
 
-## Creating model
+
 library(randomForest)
-#?randomForest.formula
 
 #Parameter tuning trial
 library(caret)
@@ -44,78 +44,69 @@ trControl <- trainControl(method = "cv",
                           number = 5,
                           search = "grid")
 
- ## finding best mtry
-rf_default <- train(Item_Outlet_Sales~ Item_Weight + Item_Fat_Content + 
-                      Item_Visibility + Item_Type + Item_MRP + Outlet_Establishment_Year + 
-                       Outlet_Location_Type,
+## finding best mtry
+rf_default <- train(Item_Outlet_Sales~ Item_Weight + 
+                     Item_Visibility + Item_Type + Item_MRP + Outlet_Establishment_Year + 
+                    Outlet_Location_Type,
                     data = train_split,
                     method = "rf",
                     tuneGrid = tuneGrid,
-                    importance = TRUE,
-                    nodesize = 10,
+                   importance = TRUE,
+                   nodesize = 10,
                     metric = "RSME",
-                    
-                    trControl = trControl)
+                  trControl = trControl)
 
 ## Print the results
 print(rf_default)
 
-## Building model on train_split datasets
-train_split_model <- randomForest(Item_Outlet_Sales~ Item_Weight + Item_Fat_Content + 
-                                    Item_Visibility + Item_Type + Item_MRP + Outlet_Establishment_Year + 
-                                     Outlet_Location_Type,data = train_split,mtry= 7, ntree=80 )
-summary(train_split_model)
+set.seed(500)
 
-## Running & validating model on test_split
-test_split_model <- randomForest(Item_Outlet_Sales~ Item_Weight + Item_Fat_Content + 
+## Building model on train_split datasets
+train_split_model <- randomForest(Item_Outlet_Sales~ Item_Weight + 
                                     Item_Visibility + Item_Type + Item_MRP + Outlet_Establishment_Year + 
-                                     Outlet_Location_Type,data = test_split,mtry= 7, ntree=80 )
-test_split_model$predicted
+                                    Outlet_Location_Type,data = train_split,mtry= 2, ntree=80 )
+summary(train_split_model)
 
 ## Predicting on Test data set
 predict_test_split <- data.frame(predict(train_split_model, test_split))
+summary(predict_test_split)
+summary(test_split$Item_Outlet_Sales)
 
-## trial calculating error in predicted 
-trial_col <- data.frame(pred = test_split_model$predicted, actual = test_split$Item_Outlet_Sales)
-error <- (trial_col$pred - trial_col$actual)
-error_df <- data.frame(error)
-error_mean <- mean(error)
-diff <- (((trial_col$pred - trial_col$actual) / trial_col$actual) * 100 )
-diff_data_frame <- data.frame(diff)
-diff_mean <- mean(diff)
-
-## Calculating RMSE of actual vs. predicted
-RMSE(test_split$Item_Outlet_Sales,test_split_model$predicted)
-RMSE(train_split$Item_Outlet_Sales,train_split_model$predicted)
-
-R2 <- 1 - (sum((trial_col$actual-trial_col$pred)^2)/sum((trial_col$actual-mean(trial_col$actual))^2))
-
-
+###############===== Running model on Test_sales dataset =====####################
 
 ## Running on test data set
 setwd("F:/Data Science Course Data/Defour Project")
 test_data <- read.csv("Test_Sales.csv", header = TRUE)
-
-## Imputing NA's from Test_sales
-
-set.seed(12345)
-test_data[test_data == 0] <- NA ## replacing 0 values to NA's
-test_data <- test_data
-
-tempData_Test <- mice(test_data,m=3, maxit = 2 ,seed=500, where = is.na(test_data))
-imputed_data_test <- complete(tempData_Test,1)
-test_data <- imputed_data_test
+set.seed(500)
 
 
+ab <- data.frame(cbind(Outlet_Type=c(test_data$Outlet_Type), 
+                       Item_Type = c(test_data$Item_Type) , 
+                       Outlet_Location_Type = c(test_data$Outlet_Location_Type),
+                       Item_Weight = c(test_data$Item_Weight),
+                       Item_Visibility = c(test_data$Item_Visibility) , 
+                       Item_MRP = c(test_data$Item_MRP) , 
+                       Outlet_Establishment_Year = c(test_data$Outlet_Establishment_Year)))
+summary(ab)
 
-## Predicting values on Test_sales from previous train model.
-predict_test <- data.frame(predict(train_split_model, test_data)) 
-summary(predict_test)
-predict_table <-  data.frame(table(predict_test)) 
+## Imputing NA's
+library(mice)
+ab[ab == 0] <- NA ## replacing 0 values to NA's
+temp <- mice(ab,m=5, maxit = 5 ,seed=500, where = is.na(ab))
+summary(temp)
+densityplot(temp)
 
-sink("output_after_NA2.csv")
+imputed <- complete(temp,3)
+ab <- imputed
+
+## Predicting Outlet sales using model buit on train data.
+predict_ab <- data.frame(predict(train_split_model, ab))
+summary(predict_ab)
+
+
+sink("xyz1.csv")
 #getOption("max.print") 
 options(max.print = 9999)
 #?options
-print(predict_test)
+print(predict_ab)
 sink()
